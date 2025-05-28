@@ -4,7 +4,7 @@ Will only wrap around the `install` command, and ask for user verification.
 
 ## Usage:
 - Make executable with `chmod +x pip-safe.py`
-- (Optional) Add alias in shell startup: `alias pips=/path/to/pip-safe.py`
+- (Optional) Add alias in shell startup (e.g `~/.bashrc`): `alias pips=/path/to/pip-safe.py`
 - Run: pips install requests
 
 ## Example:
