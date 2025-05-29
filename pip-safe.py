@@ -46,17 +46,34 @@ def select_version(name, specifier):
     return str(max(candidates))
 
 def fetch_metadata(name, version):
-    url = f'https://pypi.org/pypi/{name}/{version}/json'
-    data = json.load(urllib.request.urlopen(url))
-    info = data.get('info', {})
-    get = lambda *keys: next((info.get(k) for k in keys if info.get(k)), 'N/A')
+    # run pip install --dry-run --no-deps --disable-pip-version-check --quiet --only-binary :all: --report - package_name
+    # to get metadata in json form without actually installing the package
+    subprocess_args = [sys.executable, '-m', 'pip', 'install', '--dry-run', '--no-deps', '--disable-pip-version-check', '--quiet', '--only-binary', ':all:', '--report', '-']
+    if version:
+        subprocess_args.append(f'{name}=={version}')
+    else:
+        subprocess_args.append(name)
+    data = subprocess.check_output(subprocess_args, text=True, stderr=subprocess.DEVNULL)
+    # parse the metadata from the pip output
+    try:
+        data = json.loads(data)['install'][0]['metadata']
+    except json.JSONDecodeError:
+        return None
+    if not data:
+        return None
+    get = lambda *keys: next((data.get(k) for k in keys if data.get(k)), 'N/A')
     author  = get('author', 'maintainer')
     summary = get('summary')
-    proj_urls = info.get('project_urls') or {}
+    proj_urls = data.get('project_url') or []
+    proj_urls_dict = {}
+    for purl in proj_urls:
+        pkey, url = purl.split(', ', 1)
+        proj_urls_dict[pkey] = url
+    proj_urls = proj_urls_dict
     docs = proj_urls.get('Documentation') or next((v for k,v in proj_urls.items() if k.lower()=='documentation'), 'N/A')
-    home = proj_urls.get('Homepage') or next((v for k,v in proj_urls.items() if k.lower()=='homepage'), info.get('home_page','N/A'))
+    home = proj_urls.get('Homepage') or next((v for k,v in proj_urls.items() if k.lower()=='homepage'), data.get('home_page','N/A'))
     return {
-        'version':     info.get('version', version),
+        'version':     data.get('version', version),
         'summary':     summary,
         'author':      author,
         'documentation': docs,
@@ -84,7 +101,7 @@ def main():
 
     # display metadata
     for spec, md in results.items():
-        if md:
+        if md is not None:
             print(f"\n→ {spec}  (will install v{md['version']})")
             print(f"    Summary      : {md['summary']}")
             print(f"    Author       : {md['author']}")
